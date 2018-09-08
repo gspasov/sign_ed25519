@@ -3,9 +3,9 @@ defmodule Ed25519 do
   Key manager for key creation, signatures and verifying usign Ed25519
   """
 
-  @type pubkey :: binary()
-  @type privkey :: binary()
-  @type signature :: binary()
+  @type pubkey() :: binary()
+  @type privkey() :: binary()
+  @type signature() :: binary()
 
   @pubkey_size 32
   @privkey_size 64
@@ -14,8 +14,8 @@ defmodule Ed25519 do
   Creates a pub/priv keypair
 
   ## Example
-      iex> Ed25519.keypair()
-      iex> %{public: pubkey, private: privkey}
+      Ed25519.keypair()
+      %{public: <<>>, private: <<>>}
   """
   @spec keypair() :: %{public: binary(), private: binary()}
   def keypair() do
@@ -27,32 +27,30 @@ defmodule Ed25519 do
   Creates a signature from given message and privkey
 
   ## Example
-      iex> Ed25519.sign(<<0, 1, 2>>, <<0::512>>)
-      iex> <<132, 245, 239, 158, 2, ...>>
+      Ed25519.sign(<<0, 1, 2>>, <<0::512>>)
+      <<132, 245, 239, 158, 2>>
 
-      iex> Ed25519.sign("message", <<0::512>>)
-      iex> <<54, 123, 211, 4, 76, ...>>
+      Ed25519.sign("message", <<0::512>>)
+      <<54, 123, 211, 4, 76>>
 
       iex> Ed25519.sign("message", <<0::256>>)
-      iex> {:error, :wrong_pivkey_size}
+      {:error, {:invalid_keysize, "Private key can only be of size 64 bytes"}}
   """
   @spec sign(binary(), privkey()) ::
           signature()
-          | {:error,
-             :message_not_binary
-             | :privkey_not_binary
-             | :wrong_privkey_size}
-  def sign(message, _privkey) when not is_binary(message) do
-    {:error, :message_not_binary}
+          | {:error, {:invalid_type | :invalid_keysize, String.t()}}
+  def sign(message, _privkey)
+      when not is_binary(message) and not is_list(message) do
+    {:error, {:invalid_type, "Message can only be of type binary or list"}}
   end
 
   def sign(_message, privkey) when not is_binary(privkey) do
-    {:error, :privkey_not_binary}
+    {:error, {:invalid_type, "Private key can only be of type binary"}}
   end
 
   def sign(_message, privkey)
       when byte_size(privkey) != @privkey_size do
-    {:error, :wrong_privkey_size}
+    {:error, {:invalid_keysize, "Private key can only be of size 64 bytes"}}
   end
 
   def sign(message, privkey) do
@@ -63,39 +61,46 @@ defmodule Ed25519 do
   Verifies a signature from given signature message and pubkey
 
   ## Example
-      iex> Ed25519.verify(<<0, 1, 2>>, "message", <<0::256>>)
-      iex> :ok
+      Ed25519.verify(<<0, 1, 2>>, "message", <<0::256>>)
+      :ok
+
+      Ed25519.verify(<<7, 2, 4>>, [], <<0::256>>)
+      :ok
 
       iex> Ed25519.verify(<<0, 1, 3>>, "message", <<0::256>>)
-      iex> {:error, :failed_verification}
+      {:error, {:failed_verification, "Can't verify signature with the given data"}}
 
-      iex> Ed25519.verify("message", <<0::512>>)
-      iex> {:error, :wrong_pivkey_size}
+      iex> Ed25519.verify(<<1, 2, 3>>, "message", <<0::512>>)
+      {:error, {:invalid_keysize, "Public key can only be of size 32 bytes"}}
   """
   @spec verify(signature(), binary(), pubkey()) ::
           :ok
           | {:error,
-             :failed_verification
-             | :signature_not_binary
-             | :pubkey_not_binary
-             | :wrong_pubkey_size}
+             {:failed_verification
+              | :invalid_type
+              | :invalid_keysize, String.t()}}
   def verify(sign, _message, _pubkey) when not is_binary(sign) do
-    {:error, :signature_not_binary}
+    {:error, {:invalid_type, "Signature can only be of type binary"}}
+  end
+
+  def verify(_sign, message, _pubkey)
+      when not is_binary(message) and not is_list(message) do
+    {:error, {:invalid_type, "Message can only be of type binary or list"}}
   end
 
   def verify(_sign, _message, pubkey) when not is_binary(pubkey) do
-    {:error, :pubkey_not_binary}
+    {:error, {:invalid_type, "Public key can only be of type binary"}}
   end
 
   def verify(_sign, _message, pubkey)
       when byte_size(pubkey) != @pubkey_size do
-    {:error, :wrong_pubkey_size}
+    {:error, {:invalid_keysize, "Public key can only be of size 32 bytes"}}
   end
 
   def verify(sign, message, pubkey) do
     case :enacl.sign_verify_detached(sign, message, pubkey) do
       {:ok, _} -> :ok
-      err = {:error, :failed_verification} -> err
+      _ -> {:error, {:failed_verification, "Can't verify signature with the given data"}}
     end
   end
 end
