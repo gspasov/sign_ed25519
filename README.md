@@ -12,6 +12,7 @@ def deps do
     {:ed25519, "~> 0.1.0"}
   ]
 end
+```
 
 ## Usage
 
